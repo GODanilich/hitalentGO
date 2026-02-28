@@ -17,6 +17,7 @@ import (
 
 const (
 	maxNameLen = 200
+	maxDepth   = 5
 )
 
 type DepartmentService struct {
@@ -114,6 +115,110 @@ func (s *DepartmentService) CreateEmployee(ctx context.Context, departmentID int
 		HiredAt:      emp.HiredAt,
 		CreatedAt:    emp.CreatedAt,
 	}, nil
+}
+
+// GET /departments/{id}
+func (s *DepartmentService) GetDepartmentTree(
+	ctx context.Context,
+	rootID int64,
+	depth int,
+	includeEmployees bool,
+) (*dto.DepartmentNodeResponse, error) {
+
+	if depth < 1 || depth > maxDepth {
+		return nil, apperr.Validation("depth must be between 1 and 5")
+	}
+
+	root, err := s.deps.GetByID(ctx, rootID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, apperr.NotFound("department not found")
+	}
+	if err != nil {
+		return nil, apperr.Internal("failed to load department", err)
+	}
+
+	// allDeps: id -> department
+	allDeps := map[int64]model.Department{
+		root.ID: *root,
+	}
+	// childrenMap: parentID -> []childIDs
+	childrenMap := map[int64][]int64{}
+
+	currentLevel := []int64{root.ID}
+
+	for level := 1; level <= depth; level++ {
+		children, err := s.deps.ListByParentIDs(ctx, currentLevel)
+		if err != nil {
+			return nil, apperr.Internal("failed to load child departments", err)
+		}
+
+		nextLevel := make([]int64, 0, len(children))
+		for _, ch := range children {
+			allDeps[ch.ID] = ch
+			if ch.ParentID != nil {
+				childrenMap[*ch.ParentID] = append(childrenMap[*ch.ParentID], ch.ID)
+			}
+			nextLevel = append(nextLevel, ch.ID)
+		}
+
+		if len(nextLevel) == 0 {
+			break
+		}
+		currentLevel = nextLevel
+	}
+
+	employeesByDept := map[int64][]dto.EmployeeResponse{}
+	if includeEmployees {
+		depIDs := make([]int64, 0, len(allDeps))
+		for id := range allDeps {
+			depIDs = append(depIDs, id)
+		}
+
+		emps, err := s.emps.ListByDepartmentIDs(ctx, depIDs)
+		if err != nil {
+			return nil, apperr.Internal("failed to load employees", err)
+		}
+		for _, e := range emps {
+			employeesByDept[e.DepartmentID] = append(employeesByDept[e.DepartmentID], dto.EmployeeResponse{
+				ID:           e.ID,
+				DepartmentID: e.DepartmentID,
+				FullName:     e.FullName,
+				Position:     e.Position,
+				HiredAt:      e.HiredAt,
+				CreatedAt:    e.CreatedAt,
+			})
+		}
+	}
+
+	var buildNode func(id int64) dto.DepartmentNodeResponse
+	buildNode = func(id int64) dto.DepartmentNodeResponse {
+		dep := allDeps[id]
+		node := dto.DepartmentNodeResponse{
+			Department: dto.DepartmentResponse{
+				ID:        dep.ID,
+				Name:      dep.Name,
+				ParentID:  dep.ParentID,
+				CreatedAt: dep.CreatedAt,
+			},
+			Children: []dto.DepartmentNodeResponse{},
+		}
+
+		if includeEmployees {
+			if list, ok := employeesByDept[id]; ok {
+				node.Employees = list
+			} else {
+				node.Employees = []dto.EmployeeResponse{}
+			}
+		}
+
+		for _, childID := range childrenMap[id] {
+			node.Children = append(node.Children, buildNode(childID))
+		}
+		return node
+	}
+
+	result := buildNode(root.ID)
+	return &result, nil
 }
 
 func isUniqueViolation(err error) bool {

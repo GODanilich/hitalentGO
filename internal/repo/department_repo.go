@@ -32,3 +32,15 @@ func (r *DepartmentRepo) GetByID(ctx context.Context, id int64) (*model.Departme
 	}
 	return &dep, nil
 }
+
+func (r *DepartmentRepo) ListByParentIDs(ctx context.Context, parentIDs []int64) ([]model.Department, error) {
+	if len(parentIDs) == 0 {
+		return []model.Department{}, nil
+	}
+	var deps []model.Department
+	err := r.db.WithContext(ctx).
+		Where("parent_id IN ?", parentIDs).
+		Order("created_at ASC, id ASC").
+		Find(&deps).Error
+	return deps, err
+}
