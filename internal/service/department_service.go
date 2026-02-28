@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgconn"
 	"gorm.io/gorm"
 
@@ -47,7 +46,6 @@ func (s *DepartmentService) CreateDepartment(ctx context.Context, req dto.Create
 	}
 
 	dep := &model.Department{
-		ID:       uuid.New(),
 		Name:     name,
 		ParentID: req.ParentID,
 	}
@@ -68,7 +66,7 @@ func (s *DepartmentService) CreateDepartment(ctx context.Context, req dto.Create
 }
 
 // POST /departments/{id}/employees
-func (s *DepartmentService) CreateEmployee(ctx context.Context, departmentID uuid.UUID, req dto.CreateEmployeeRequest) (*dto.EmployeeResponse, error) {
+func (s *DepartmentService) CreateEmployee(ctx context.Context, departmentID int64, req dto.CreateEmployeeRequest) (*dto.EmployeeResponse, error) {
 
 	_, err := s.deps.GetByID(ctx, departmentID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -98,7 +96,6 @@ func (s *DepartmentService) CreateEmployee(ctx context.Context, departmentID uui
 	}
 
 	emp := &model.Employee{
-		ID:           uuid.New(),
 		DepartmentID: departmentID,
 		FullName:     fullName,
 		Position:     position,

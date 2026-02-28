@@ -1,14 +1,10 @@
 package model
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
+import "time"
 
 type Employee struct {
-	ID           uuid.UUID  `gorm:"type:uuid;primaryKey;column:id"`
-	DepartmentID uuid.UUID  `gorm:"type:uuid;column:department_id;not null"`
+	ID           int64      `gorm:"primaryKey;column:id"`
+	DepartmentID int64      `gorm:"column:department_id;not null"`
 	FullName     string     `gorm:"column:full_name;type:varchar(200);not null"`
 	Position     string     `gorm:"column:position;type:varchar(200);not null"`
 	HiredAt      *time.Time `gorm:"column:hired_at;type:date"`

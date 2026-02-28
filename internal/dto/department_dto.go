@@ -1,19 +1,15 @@
 package dto
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
+import "time"
 
 type CreateDepartmentRequest struct {
-	Name     string     `json:"name"`
-	ParentID *uuid.UUID `json:"parent_id"`
+	Name     string `json:"name"`
+	ParentID *int64 `json:"parent_id"`
 }
 
 type DepartmentResponse struct {
-	ID        uuid.UUID  `json:"id"`
-	Name      string     `json:"name"`
-	ParentID  *uuid.UUID `json:"parent_id"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	ParentID  *int64    `json:"parent_id"`
+	CreatedAt time.Time `json:"created_at"`
 }

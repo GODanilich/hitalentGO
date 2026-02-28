@@ -1,10 +1,6 @@
 package dto
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
+import "time"
 
 type CreateEmployeeRequest struct {
 	FullName string `json:"full_name"`
@@ -13,8 +9,8 @@ type CreateEmployeeRequest struct {
 }
 
 type EmployeeResponse struct {
-	ID           uuid.UUID  `json:"id"`
-	DepartmentID uuid.UUID  `json:"department_id"`
+	ID           int64      `json:"id"`
+	DepartmentID int64      `json:"department_id"`
 	FullName     string     `json:"full_name"`
 	Position     string     `json:"position"`
 	HiredAt      *time.Time `json:"hired_at"`

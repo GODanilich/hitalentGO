@@ -2,8 +2,7 @@ package handlers
 
 import (
 	"net/http"
-
-	"github.com/google/uuid"
+	"strconv"
 
 	"GODanilich/hitalentGO/internal/apperr"
 	"GODanilich/hitalentGO/internal/dto"
@@ -40,9 +39,9 @@ func (h *DepartmentsHandler) CreateDepartment(w http.ResponseWriter, r *http.Req
 func (h *DepartmentsHandler) CreateEmployee(w http.ResponseWriter, r *http.Request) {
 	idStr := router.Param(r, "id")
 
-	depID, err := uuid.Parse(idStr)
-	if err != nil {
-		writeAppError(w, apperr.Validation("invalid department id (uuid expected)"))
+	depID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || depID <= 0 {
+		writeAppError(w, apperr.Validation("invalid department id (int64 expected)"))
 		return
 	}
 
