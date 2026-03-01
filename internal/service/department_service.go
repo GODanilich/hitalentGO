@@ -299,6 +299,121 @@ func (s *DepartmentService) UpdateDepartment(
 	}, nil
 }
 
+// DELETE /departments/{id}
+func (s *DepartmentService) collectSubtreeIDs(ctx context.Context, rootID int64) ([]int64, error) {
+	seen := map[int64]struct{}{rootID: {}}
+	level := []int64{rootID}
+
+	for len(level) > 0 {
+		children, err := s.deps.ListByParentIDs(ctx, level)
+		if err != nil {
+			return nil, err
+		}
+
+		next := make([]int64, 0, len(children))
+		for _, ch := range children {
+			if _, ok := seen[ch.ID]; ok {
+				continue
+			}
+			seen[ch.ID] = struct{}{}
+			next = append(next, ch.ID)
+		}
+		level = next
+	}
+
+	ids := make([]int64, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// DELETE /departments/{id}
+func (s *DepartmentService) DeleteDepartment(
+	ctx context.Context,
+	id int64,
+	mode string,
+	reassignTo *int64,
+) error {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = "cascade"
+	}
+
+	_, err := s.deps.GetByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return apperr.NotFound("department not found")
+	}
+	if err != nil {
+		return apperr.Internal("failed to load department", err)
+	}
+
+	switch mode {
+	case "cascade":
+
+		if err := s.deps.DeleteByID(ctx, id); err != nil {
+			return apperr.Internal("failed to delete department", err)
+		}
+		return nil
+
+	case "reassign":
+		if reassignTo == nil {
+			return apperr.Validation("reassign_to_department_id is required for mode=reassign")
+		}
+		if *reassignTo <= 0 {
+			return apperr.Validation("reassign_to_department_id must be a positive int64")
+		}
+
+		_, err := s.deps.GetByID(ctx, *reassignTo)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperr.NotFound("reassign_to_department_id department not found")
+		}
+		if err != nil {
+			return apperr.Internal("failed to load reassign_to department", err)
+		}
+
+		subtreeIDs, err := s.collectSubtreeIDs(ctx, id)
+		if err != nil {
+			return apperr.Internal("failed to collect subtree", err)
+		}
+
+		for _, sid := range subtreeIDs {
+			if sid == *reassignTo {
+				return apperr.Conflict("reassign_to_department_id cannot be inside deleted subtree", nil)
+			}
+		}
+
+		txErr := s.depsTx(ctx, func(txDeps *repo.DepartmentRepo, txEmps *repo.EmployeeRepo) error {
+
+			if err := txEmps.ReassignDepartments(ctx, subtreeIDs, *reassignTo); err != nil {
+				return err
+			}
+			if err := txDeps.DeleteByID(ctx, id); err != nil {
+				return err
+			}
+			return nil
+		})
+		if txErr != nil {
+			return apperr.Internal("failed to delete department (reassign)", txErr)
+		}
+		return nil
+
+	default:
+		return apperr.Validation("mode must be 'cascade' or 'reassign'")
+	}
+}
+
+// DELETE /departments/{id}
+func (s *DepartmentService) depsTx(ctx context.Context, fn func(txDeps *repo.DepartmentRepo, txEmps *repo.EmployeeRepo) error) error {
+	base := s.deps.DB().WithContext(ctx)
+
+	return base.Transaction(func(tx *gorm.DB) error {
+		txDeps := s.deps.WithDB(tx)
+		txEmps := s.emps.WithDB(tx)
+		return fn(txDeps, txEmps)
+	})
+}
+
 func isUniqueViolation(err error) bool {
 	// Postgres unique violation code: 23505
 	var pgErr *pgconn.PgError

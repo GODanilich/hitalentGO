@@ -31,3 +31,17 @@ func (r *EmployeeRepo) ListByDepartmentIDs(ctx context.Context, depIDs []int64) 
 		Find(&emps).Error
 	return emps, err
 }
+
+func (r *EmployeeRepo) ReassignDepartments(ctx context.Context, fromDepIDs []int64, toDepID int64) error {
+	if len(fromDepIDs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Model(&model.Employee{}).
+		Where("department_id IN ?", fromDepIDs).
+		Update("department_id", toDepID).Error
+}
+
+func (r *EmployeeRepo) WithDB(db *gorm.DB) *EmployeeRepo {
+	return &EmployeeRepo{db: db}
+}

@@ -42,6 +42,7 @@ func main() {
 	rt.Handle(http.MethodPost, "/departments/{id}/employees", http.HandlerFunc(depH.CreateEmployee))
 	rt.Handle(http.MethodGet, "/departments/{id}", http.HandlerFunc(depH.GetDepartment))
 	rt.Handle(http.MethodPatch, "/departments/{id}", http.HandlerFunc(depH.PatchDepartment))
+	rt.Handle(http.MethodDelete, "/departments/{id}", http.HandlerFunc(depH.DeleteDepartment))
 
 	// middleware
 	h := middleware.Chain(rt, middleware.Recover(), middleware.Logger())

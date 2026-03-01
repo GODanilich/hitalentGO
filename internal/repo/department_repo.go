@@ -48,3 +48,15 @@ func (r *DepartmentRepo) ListByParentIDs(ctx context.Context, parentIDs []int64)
 func (r *DepartmentRepo) Update(ctx context.Context, dep *model.Department) error {
 	return r.db.WithContext(ctx).Save(dep).Error
 }
+
+func (r *DepartmentRepo) DeleteByID(ctx context.Context, id int64) error {
+	return r.db.WithContext(ctx).Delete(&model.Department{}, "id = ?", id).Error
+}
+
+func (r *DepartmentRepo) DB() *gorm.DB {
+	return r.db
+}
+
+func (r *DepartmentRepo) WithDB(db *gorm.DB) *DepartmentRepo {
+	return &DepartmentRepo{db: db}
+}
