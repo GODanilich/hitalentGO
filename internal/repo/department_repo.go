@@ -44,3 +44,7 @@ func (r *DepartmentRepo) ListByParentIDs(ctx context.Context, parentIDs []int64)
 		Find(&deps).Error
 	return deps, err
 }
+
+func (r *DepartmentRepo) Update(ctx context.Context, dep *model.Department) error {
+	return r.db.WithContext(ctx).Save(dep).Error
+}

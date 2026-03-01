@@ -221,6 +221,84 @@ func (s *DepartmentService) GetDepartmentTree(
 	return &result, nil
 }
 
+// PATCH /departments/{id}
+func (s *DepartmentService) UpdateDepartment(
+	ctx context.Context,
+	id int64,
+	req dto.PatchDepartmentRequest,
+) (*dto.DepartmentResponse, error) {
+
+	dep, err := s.deps.GetByID(ctx, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, apperr.NotFound("department not found")
+	}
+	if err != nil {
+		return nil, apperr.Internal("failed to load department", err)
+	}
+
+	if req.HasName() {
+		name := req.NameTrimmed()
+		if name == "" || len(name) > maxNameLen {
+			return nil, apperr.Validation("name must be 1..200 characters")
+		}
+		dep.Name = name
+	}
+
+	if req.HasParentID() {
+		if req.ParentID.Value == nil {
+			dep.ParentID = nil
+		} else {
+			newParentID := *req.ParentID.Value
+
+			if newParentID <= 0 {
+				return nil, apperr.Validation("parent_id must be a positive int64 or null")
+			}
+			if newParentID == id {
+				return nil, apperr.Conflict("department cannot be parent of itself", nil)
+			}
+
+			parent, err := s.deps.GetByID(ctx, newParentID)
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, apperr.NotFound("parent department not found")
+			}
+			if err != nil {
+				return nil, apperr.Internal("failed to load parent department", err)
+			}
+
+			cur := parent
+			for cur != nil && cur.ParentID != nil {
+				if *cur.ParentID == id {
+					return nil, apperr.Conflict("cycle detected: cannot move department into its subtree", nil)
+				}
+				next, err := s.deps.GetByID(ctx, *cur.ParentID)
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					break
+				}
+				if err != nil {
+					return nil, apperr.Internal("failed during cycle check", err)
+				}
+				cur = next
+			}
+
+			dep.ParentID = &newParentID
+		}
+	}
+
+	if err := s.deps.Update(ctx, dep); err != nil {
+		if isUniqueViolation(err) {
+			return nil, apperr.Conflict("department name already exists for this parent", err)
+		}
+		return nil, apperr.Internal("failed to update department", err)
+	}
+
+	return &dto.DepartmentResponse{
+		ID:        dep.ID,
+		Name:      dep.Name,
+		ParentID:  dep.ParentID,
+		CreatedAt: dep.CreatedAt,
+	}, nil
+}
+
 func isUniqueViolation(err error) bool {
 	// Postgres unique violation code: 23505
 	var pgErr *pgconn.PgError
